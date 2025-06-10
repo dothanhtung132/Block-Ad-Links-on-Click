@@ -1,6 +1,6 @@
 // ==UserScript==
-// @name         Block Ad Links on Click
-// @description  Prevent links that cause popup ads from opening
+// @name         Block Popup Ad Links (Non-intrusive)
+// @description  Prevent links from opening new pages, but keep other event handlers active
 // @author       Tung Do
 // @version      0.0.1
 // @match        *://*/*
@@ -16,16 +16,17 @@
         'tiktok'
     ];
 
-    // Create selector string from domains
+    // Build selector
     const selector = blockedDomains
         .map(domain => `a[href*="${domain}"][target="_blank"]`)
         .join(', ');
 
-    // Attach click event to block opening
+    // Block only default link behavior (not other click handlers)
     document.querySelectorAll(selector).forEach(link => {
         link.addEventListener('click', function (e) {
-            e.preventDefault(); // Prevent default link behavior
-            e.stopPropagation(); // Stop event from bubbling up
-        });
+            e.preventDefault(); // Prevent navigation
+            console.log('Navigation blocked for:', link.href);
+            // Other handlers will still run
+        }, false); // useCapture=false to run after other handlers if needed
     });
 })();
