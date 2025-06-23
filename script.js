@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Block Popup Ad Links
-// @description  Prevent popup ad links from navigating, but allow other event handlers to run. Auto-click blocked links on load and dynamic changes.
-// @version      0.0.4
+// @description  Prevent popup ad links from navigating, but allow other event handlers to run. Auto-click blocked link text on load and dynamic changes.
+// @version      0.0.5
 // @author       Tung Do
 // @match        *://*/*
 // @grant        none
@@ -11,16 +11,17 @@
 
     const blockedDomains = ['shopee.vn', 'lazada.vn', 'tiktok.com', 't.co/', 'profitableratecpm.com'];
 
-    const isBlockedLink = href =>
-        blockedDomains.some(domain => href.includes(domain));
+    const isBlockedLink = text =>
+        blockedDomains.some(domain => text.includes(domain));
 
     // Block navigation on click
     document.addEventListener('click', e => {
-        const link = e.target.closest('a[href]');
-        if (link) {
-            const url = link.getAttribute('href');
+        const linkEl = e.target.closest('[href], span, div, p');
+        if (linkEl) {
+            const url = linkEl.getAttribute?.('href') || linkEl.textContent?.trim();
             if (url && isBlockedLink(url)) {
-                e.preventDefault();
+                e.preventDefault?.();
+                e.stopPropagation?.();
                 console.log('Navigation blocked for:', url);
             }
         }
@@ -36,8 +37,9 @@
         return originalWindowOpen.call(window, url, ...args);
     };
 
-    // Find & click blocked links
+    // Find and click blocked links or span-like links
     const findAndClickBlockedLinks = () => {
+        // Normal <a> tags
         document.querySelectorAll('a[href]').forEach(link => {
             const url = link.getAttribute('href');
             if (url && isBlockedLink(url)) {
