@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Block Popup Ad Links
-// @description  Prevent popup ad links from navigating, but allow other event handlers to run. On load, auto-click blocked links.
-// @version      0.0.3
+// @description  Prevent popup ad links from navigating, but allow other event handlers to run. Auto-click blocked links on load and dynamic changes.
+// @version      0.0.4
 // @author       Tung Do
 // @match        *://*/*
 // @grant        none
@@ -36,16 +36,37 @@
         return originalWindowOpen.call(window, url, ...args);
     };
 
-    // On load, find all blocked links and click them
-    window.addEventListener('load', () => {
-        const links = document.querySelectorAll('a[href]');
-        links.forEach(link => {
+    // Find & click blocked links
+    const findAndClickBlockedLinks = () => {
+        document.querySelectorAll('a[href]').forEach(link => {
             const url = link.getAttribute('href');
             if (url && isBlockedLink(url)) {
-                console.log('Auto-clicking blocked link:', url);
+                console.log('Auto-clicking blocked <a> link:', url);
                 link.click();
             }
         });
+
+        // Span, div, p with link-like text
+        document.querySelectorAll('span, div, p').forEach(el => {
+            const text = el.textContent.trim();
+            if (text.startsWith('http') && isBlockedLink(text)) {
+                console.log('Auto-clicking blocked text link:', text);
+                el.click();
+            }
+        });
+    };
+
+    // Run once on load
+    window.addEventListener('load', findAndClickBlockedLinks);
+
+    // Observe dynamic DOM changes
+    const observer = new MutationObserver(() => {
+        findAndClickBlockedLinks();
+    });
+
+    observer.observe(document.body, {
+        childList: true,
+        subtree: true
     });
 
 })();
