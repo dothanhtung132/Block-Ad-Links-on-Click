@@ -9,7 +9,7 @@
 (() => {
     'use strict';
 
-    const blockedDomains = ['shopee.vn', 'lazada.vn', 'tiktok.com', 't.co/', 'profitableratecpm.com', 'eyep.blog'];
+    const blockedDomains = ['shopee.vn', 'lazada.vn', 'tiktok.com', 't.co/', 'profitableratecpm.com', 'eyep.blog', 'facebook.com'];
 
     const isBlockedLink = (text) => blockedDomains.some((domain) => text.includes(domain));
 
@@ -43,7 +43,20 @@
                 return null;
             }
             return Reflect.apply(target, thisArg, args);
-        }
+        },
+    });
+
+    //find empty popup div
+    const divs = document.querySelectorAll('div, a');
+    const emptyPositionedDivs = Array.from(divs).filter((div) => {
+        const style = window.getComputedStyle(div);
+        const isPositioned = style.position === 'absolute' || style.position === 'fixed';
+        const isEmpty = div.children.length === 0 && div.textContent.trim() === '';
+        return isPositioned && isEmpty;
+    });
+
+    emptyPositionedDivs.forEach((div) => {
+        div.remove();
     });
 
     const findAndClickBlockedLinks = () => {
