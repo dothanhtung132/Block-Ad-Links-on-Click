@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Block Popup Ad Links
 // @description  Prevent popup ad links from navigating, but allow other event handlers to run. Auto-click blocked link text on load and dynamic changes.
-// @version      0.0.5
+// @version      0.0.7
 // @author       Tung Do
 // @match        *://*/*
 // @grant        none
@@ -9,66 +9,75 @@
 (() => {
     'use strict';
 
-    const blockedDomains = ['shopee.vn', 'lazada.vn', 'tiktok.com', 't.co/', 'profitableratecpm.com'];
+    const blockedDomains = ['shopee.vn', 'lazada.vn', 'tiktok.com', 't.co/', 'profitableratecpm.com', 'eyep.blog'];
 
-    const isBlockedLink = text =>
-        blockedDomains.some(domain => text.includes(domain));
+    const isBlockedLink = (text) => blockedDomains.some((domain) => text.includes(domain));
+
+    const preventNavigation = (url) => {
+        console.log('Navigation blocked for:', url);
+        return false;
+    };
 
     // Block navigation on click
-    document.addEventListener('click', e => {
+    document.addEventListener('click', (e) => {
         const linkEl = e.target.closest('[href], span, div, p');
         if (linkEl) {
             const url = linkEl.getAttribute?.('href') || linkEl.textContent?.trim();
             if (url && isBlockedLink(url)) {
                 e.preventDefault?.();
                 e.stopPropagation?.();
-                console.log('Navigation blocked for:', url);
+                preventNavigation(url);
             }
         }
     });
 
     // Block window.open
-    const originalWindowOpen = window.open;
-    window.open = (url, ...args) => {
-        if (isBlockedLink(url)) {
-            console.log('Blocked window.open for:', url);
-            return null;
+    window.open = new Proxy(window.open, {
+        apply(target, thisArg, args) {
+            const [url] = args;
+            if (isBlockedLink(url)) {
+                console.log('Blocked window.open for:', url);
+                document.querySelectorAll('span, div, p').forEach((el) => {
+                    if (el.textContent.trim() === url) el.remove();
+                });
+                return null;
+            }
+            return Reflect.apply(target, thisArg, args);
         }
-        return originalWindowOpen.call(window, url, ...args);
-    };
+    });
 
-    // Find and click blocked links or span-like links
     const findAndClickBlockedLinks = () => {
-        // Normal <a> tags
-        document.querySelectorAll('a[href]').forEach(link => {
-            const url = link.getAttribute('href');
-            if (url && isBlockedLink(url)) {
-                console.log('Auto-clicking blocked <a> link:', url);
-                link.click();
-            }
-        });
-
-        // Span, div, p with link-like text
-        document.querySelectorAll('span, div, p').forEach(el => {
-            const text = el.textContent.trim();
+        document.querySelectorAll('a[href], span, div, p').forEach((el) => {
+            const text = el.getAttribute('href') || el.textContent.trim();
             if (text.startsWith('http') && isBlockedLink(text)) {
-                console.log('Auto-clicking blocked text link:', text);
-                el.click();
+                waitForElement(el)
+                    .then((el) => {
+                        el.click();
+                        console.log('Auto-clicking blocked link:', text);
+                    })
+                    .then(() => el.remove())
+                    .catch(console.error);
             }
         });
     };
 
-    // Run once on load
     window.addEventListener('load', findAndClickBlockedLinks);
 
-    // Observe dynamic DOM changes
-    const observer = new MutationObserver(() => {
-        findAndClickBlockedLinks();
-    });
+    const observer = new MutationObserver(findAndClickBlockedLinks);
+    observer.observe(document.body, { childList: true, subtree: true });
 
-    observer.observe(document.body, {
-        childList: true,
-        subtree: true
-    });
-
+    function waitForElement(el, timeout = 10000) {
+        return new Promise((resolve, reject) => {
+            const endTime = Date.now() + timeout;
+            (function checkVisibility() {
+                if (el && el.offsetParent !== null) {
+                    resolve(el);
+                } else if (Date.now() > endTime) {
+                    reject(new Error('Timeout: Element not visible'));
+                } else {
+                    setTimeout(checkVisibility, 100);
+                }
+            })();
+        });
+    }
 })();
