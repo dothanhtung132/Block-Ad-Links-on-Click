@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Block Popup Ad Links
 // @description  Prevent popup ad links from navigating, but allow other event handlers to run. Auto-click blocked link text on load and dynamic changes.
-// @version      0.0.7
+// @version      0.0.8
 // @author       Tung Do
 // @match        *://*/*
 // @grant        none
@@ -9,9 +9,28 @@
 (() => {
     'use strict';
 
-    const blockedDomains = ['shopee.vn', 'lazada.vn', 'tiktok.com', 't.co/', 'profitableratecpm.com', 'eyep.blog', 'facebook.com'];
+    const blockedDomains = ['shopee.vn', 'lazada.vn', 'tiktok.com', 't.co', 'profitableratecpm.com', 'eyep.blog', 'facebook.com'];
+    const whitelistedDomains = ['google.com', 'facebook.com'];
 
-    const isBlockedLink = (text) => blockedDomains.some((domain) => text.includes(domain));
+    const isBlockedLink = (text) => {
+        const currentUrl = window.location.href;
+        const currentHost = window.location.hostname;
+
+        // If current page's domain is whitelisted, skip blocking entirely
+        const isCurrentWhitelisted = whitelistedDomains.some((domain) => currentHost.includes(domain));
+        if (isCurrentWhitelisted) return false;
+
+        try {
+            const urlHost = new URL(text).hostname;
+
+            const isBlocked = blockedDomains.some((domain) => urlHost.includes(domain));
+
+            return isBlocked && !currentUrl.includes(urlHost);
+        } catch (e) {
+            // If text isn't a valid URL, ignore it
+            return false;
+        }
+    };
 
     const preventNavigation = (url) => {
         console.log('Navigation blocked for:', url);
@@ -68,7 +87,7 @@
                         el.click();
                         console.log('Auto-clicking blocked link:', text);
                     })
-                    .then(() => el.remove())
+                    //.then(() => el.remove())
                     .catch(console.error);
             }
         });
