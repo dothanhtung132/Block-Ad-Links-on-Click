@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Block Popup Ad Links
 // @description  Prevent popup ad links from navigating, but allow other event handlers to run. Auto-click blocked link text on load and dynamic changes.
-// @version      0.0.8
+// @version      0.0.9
 // @author       Tung Do
 // @match        *://*/*
 // @grant        none
