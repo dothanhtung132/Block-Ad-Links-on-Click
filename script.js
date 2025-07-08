@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Block Popup Ad Links
 // @description  Prevent popup ad links from navigating, but allow other event handlers to run. Auto-click blocked link text on load and dynamic changes.
-// @version      0.0.8
+// @version      0.0.9
 // @author       Tung Do
 // @match        *://*/*
 // @grant        none
@@ -9,7 +9,7 @@
 (() => {
     'use strict';
 
-    const blockedDomains = ['shopee.vn', 'lazada.vn', 'tiktok.com', 't.co', 'profitableratecpm.com', 'eyep.blog', 'facebook.com'];
+    const blockedDomains = ['shopee.vn', 'lazada.vn', 'tiktok.com', 'profitableratecpm.com', 'eyep.blog'];
     const whitelistedDomains = ['google.com', 'facebook.com'];
 
     const isBlockedLink = (text) => {
@@ -22,9 +22,7 @@
 
         try {
             const urlHost = new URL(text).hostname;
-
             const isBlocked = blockedDomains.some((domain) => urlHost.includes(domain));
-
             return isBlocked && !currentUrl.includes(urlHost);
         } catch (e) {
             // If text isn't a valid URL, ignore it
@@ -32,21 +30,31 @@
         }
     };
 
-    const preventNavigation = (url) => {
-        console.log('Navigation blocked for:', url);
-        return false;
-    };
-
     // Block navigation on click
     document.addEventListener('click', (e) => {
-        const linkEl = e.target.closest('[href], span, div, p');
-        if (linkEl) {
-            const url = linkEl.getAttribute?.('href') || linkEl.textContent?.trim();
-            if (url && isBlockedLink(url)) {
-                e.preventDefault?.();
-                e.stopPropagation?.();
-                preventNavigation(url);
-            }
+        const link = e.target.closest('[href], span, div, p');
+        if (!link) return;
+
+        const rawText = link.getAttribute('href') || link.textContent.trim();
+
+        let href;
+        try {
+            const url = new URL(rawText, location.href);
+            href = url.href;
+        } catch {
+            return; // Not a valid URL, ignore
+        }
+
+        if (isBlockedLink(href)) {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('Navigation blocked for:', href);
+
+            // Optional: visually indicate it's blocked
+            link.style.pointerEvents = 'none';
+            link.style.opacity = '0.5';
+
+            return false;
         }
     });
 
@@ -56,9 +64,6 @@
             const [url] = args;
             if (isBlockedLink(url)) {
                 console.log('Blocked window.open for:', url);
-                document.querySelectorAll('span, div, p').forEach((el) => {
-                    if (el.textContent.trim() === url) el.remove();
-                });
                 return null;
             }
             return Reflect.apply(target, thisArg, args);
@@ -67,38 +72,69 @@
 
     //find empty popup div
     const divs = document.querySelectorAll('div, a');
-    const emptyPositionedDivs = Array.from(divs).filter((div) => {
-        const style = window.getComputedStyle(div);
-        const isPositioned = style.position === 'absolute' || style.position === 'fixed';
-        const isEmpty = div.children.length === 0 && div.textContent.trim() === '';
-        return isPositioned && isEmpty;
-    });
+    Array.from(divs)
+        .filter((div) => {
+            const style = window.getComputedStyle(div);
+            const isPositioned = style.position === 'absolute' || style.position === 'fixed';
+            const isEmpty = div.children.length === 0 && div.textContent.trim() === '';
+            return isPositioned && isEmpty;
+        })
+        .forEach((div) => {
+            div.remove();
+        });
 
-    emptyPositionedDivs.forEach((div) => {
-        div.remove();
-    });
+    const clickedUrls = new Set();
 
     const findAndClickBlockedLinks = () => {
-        document.querySelectorAll('a[href], span, div, p').forEach((el) => {
-            const text = el.getAttribute('href') || el.textContent.trim();
-            if (text.startsWith('http') && isBlockedLink(text)) {
-                waitForElement(el)
-                    .then((el) => {
-                        el.click();
-                        console.log('Auto-clicking blocked link:', text);
-                    })
-                    //.then(() => el.remove())
-                    .catch(console.error);
+        document.querySelectorAll('[href], span, div, p').forEach((el) => {
+            const rawText = el.getAttribute('href') || el.textContent.trim();
+            let href;
+            try {
+                const url = new URL(rawText, location.href); // handle relative and absolute URLs
+                href = url.href;
+            } catch (e) {
+                return; // Not a valid URL, skip
+            }
+            if (isBlockedLink(href) && !clickedUrls.has(href)) {
+                waitForElement(el).then((resolvedEl) => {
+                    if (!resolvedEl || clickedUrls.has(href)) return;
+                    console.log('Auto-clicking blocked link:', href);
+                    resolvedEl.click();
+                    clickedUrls.add(href);
+                });
             }
         });
     };
 
+    // Safe way to start observing after body is available
+    function startObservingBlockedLinks() {
+        const observer = new MutationObserver(findAndClickBlockedLinks);
+        observer.observe(document.body, { childList: true, subtree: true });
+    }
+
+    // Wait for <body> to exist before observing
+    function waitForBodyAndObserve() {
+        if (document.body) {
+            findAndClickBlockedLinks(); // Initial run
+            startObservingBlockedLinks(); // Attach observer
+        } else {
+            new MutationObserver((mutations, tempObserver) => {
+                if (document.body) {
+                    tempObserver.disconnect();
+                    findAndClickBlockedLinks();
+                    startObservingBlockedLinks();
+                }
+            }).observe(document.documentElement, { childList: true, subtree: true });
+        }
+    }
+
+    // This runs when window has fully loaded
     window.addEventListener('load', findAndClickBlockedLinks);
 
-    const observer = new MutationObserver(findAndClickBlockedLinks);
-    observer.observe(document.body, { childList: true, subtree: true });
+    // This runs ASAP after script runs
+    waitForBodyAndObserve();
 
-    function waitForElement(el, timeout = 10000) {
+    function waitForElement(el, timeout = 7000) {
         return new Promise((resolve, reject) => {
             const endTime = Date.now() + timeout;
             (function checkVisibility() {
