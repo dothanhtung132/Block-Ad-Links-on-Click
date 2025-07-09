@@ -1,11 +1,10 @@
 // ==UserScript==
 // @name         Block Popup Ad Links
 // @description  Prevent popup ad links from navigating, but allow other event handlers to run. Auto-click blocked link text on load and dynamic changes.
-// @version      0.0.9
+// @version      0.1.0
 // @author       Tung Do
 // @match        *://*/*
 // @grant        none
-// @run-at       document-start
 // ==/UserScript==
 (() => {
     'use strict';
@@ -107,33 +106,10 @@
         });
     };
 
-    // Safe way to start observing after body is available
-    function startObservingBlockedLinks() {
-        const observer = new MutationObserver(findAndClickBlockedLinks);
-        observer.observe(document.body, { childList: true, subtree: true });
-    }
-
-    // Wait for <body> to exist before observing
-    function waitForBodyAndObserve() {
-        if (document.body) {
-            findAndClickBlockedLinks(); // Initial run
-            startObservingBlockedLinks(); // Attach observer
-        } else {
-            new MutationObserver((mutations, tempObserver) => {
-                if (document.body) {
-                    tempObserver.disconnect();
-                    findAndClickBlockedLinks();
-                    startObservingBlockedLinks();
-                }
-            }).observe(document.documentElement, { childList: true, subtree: true });
-        }
-    }
-
     // This runs when window has fully loaded
     window.addEventListener('load', findAndClickBlockedLinks);
-
-    // This runs ASAP after script runs
-    waitForBodyAndObserve();
+    const observer = new MutationObserver(findAndClickBlockedLinks);
+    observer.observe(document.body, { childList: true, subtree: true });
 
     function waitForElement(el, timeout = 7000) {
         return new Promise((resolve, reject) => {
