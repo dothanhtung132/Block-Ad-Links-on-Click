@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Block Popup Ad Links
 // @description  Prevent popup ad links from navigating, but allow other event handlers to run. Auto-click blocked link text on load and dynamic changes.
-// @version      0.1.0
+// @version      0.1.1
 // @author       Tung Do
 // @match        *://*/*
 // @grant        none
@@ -12,18 +12,25 @@
     const blockedDomains = ['shopee.vn', 'lazada.vn', 'tiktok.com', 'profitableratecpm.com', 'eyep.blog'];
     const whitelistedDomains = ['google.com', 'facebook.com'];
 
+    const getBaseDomain = (host) => {
+        const parts = host.split('.');
+        return parts.slice(-2).join('.');
+    };
+
+    const currentHost = window.location.hostname;
+
+    // If current page's domain is whitelisted, skip blocking entirely
+    const isCurrentWhitelisted = whitelistedDomains.some((domain) => currentHost.includes(domain));
+    if (isCurrentWhitelisted) return false;
+
     const isBlockedLink = (text) => {
-        const currentUrl = window.location.href;
-        const currentHost = window.location.hostname;
-
-        // If current page's domain is whitelisted, skip blocking entirely
-        const isCurrentWhitelisted = whitelistedDomains.some((domain) => currentHost.includes(domain));
-        if (isCurrentWhitelisted) return false;
-
         try {
+            const currentHost = window.location.hostname;
             const urlHost = new URL(text).hostname;
-            const isBlocked = blockedDomains.some((domain) => urlHost.includes(domain));
-            return isBlocked && !currentUrl.includes(urlHost);
+            const baseDomain = getBaseDomain(urlHost);
+            const baseCurentDomain = getBaseDomain(currentHost);
+            const isBlocked = blockedDomains.some((domain) => baseDomain.includes(domain));
+            return isBlocked && baseCurentDomain !== baseDomain;
         } catch (e) {
             // If text isn't a valid URL, ignore it
             return false;
@@ -32,29 +39,14 @@
 
     // Block navigation on click
     document.addEventListener('click', (e) => {
-        const link = e.target.closest('[href], span, div, p');
-        if (!link) return;
-
-        const rawText = link.getAttribute('href') || link.textContent.trim();
-
-        let href;
-        try {
-            const url = new URL(rawText, location.href);
-            href = url.href;
-        } catch {
-            return; // Not a valid URL, ignore
-        }
-
-        if (isBlockedLink(href)) {
-            e.preventDefault();
-            e.stopPropagation();
-            console.log('Navigation blocked for:', href);
-
-            // Optional: visually indicate it's blocked
-            link.style.pointerEvents = 'none';
-            link.style.opacity = '0.5';
-
-            return false;
+        const linkEl = e.target.closest('[href], button, span, div, p');
+        if (linkEl) {
+            const url = linkEl.getAttribute?.('href') || linkEl.textContent?.trim();
+            if (url && isBlockedLink(url)) {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log('Navigation blocked for:', url);
+            }
         }
     });
 
@@ -64,6 +56,9 @@
             const [url] = args;
             if (isBlockedLink(url)) {
                 console.log('Blocked window.open for:', url);
+                // document.querySelectorAll('span, div, p').forEach((el) => {
+                //    if (el.textContent.trim() === url) el.remove();
+                // });
                 return null;
             }
             return Reflect.apply(target, thisArg, args);
@@ -72,46 +67,38 @@
 
     //find empty popup div
     const divs = document.querySelectorAll('div, a');
-    Array.from(divs)
-        .filter((div) => {
-            const style = window.getComputedStyle(div);
-            const isPositioned = style.position === 'absolute' || style.position === 'fixed';
-            const isEmpty = div.children.length === 0 && div.textContent.trim() === '';
-            return isPositioned && isEmpty;
-        })
-        .forEach((div) => {
-            div.remove();
-        });
+    const emptyPositionedDivs = Array.from(divs).filter((div) => {
+        const style = window.getComputedStyle(div);
+        const isPositioned = style.position === 'absolute' || style.position === 'fixed';
+        const isEmpty = div.children.length === 0 && div.textContent.trim() === '';
+        return isPositioned && isEmpty;
+    });
 
-    const clickedUrls = new Set();
+    emptyPositionedDivs.forEach((div) => {
+        div.remove();
+    });
 
     const findAndClickBlockedLinks = () => {
-        document.querySelectorAll('[href], span, div, p').forEach((el) => {
-            const rawText = el.getAttribute('href') || el.textContent.trim();
-            let href;
-            try {
-                const url = new URL(rawText, location.href); // handle relative and absolute URLs
-                href = url.href;
-            } catch (e) {
-                return; // Not a valid URL, skip
-            }
-            if (isBlockedLink(href) && !clickedUrls.has(href)) {
-                waitForElement(el).then((resolvedEl) => {
-                    if (!resolvedEl || clickedUrls.has(href)) return;
-                    console.log('Auto-clicking blocked link:', href);
-                    resolvedEl.click();
-                    clickedUrls.add(href);
-                });
+        document.querySelectorAll('[href], button').forEach((el) => {
+            const text = el.getAttribute('href') || el.textContent.trim();
+            if (text.startsWith('http') && isBlockedLink(text)) {
+                waitForElement(el)
+                    .then((el) => {
+                        console.log('Auto-clicking blocked link:', text);
+                        el.click();
+                    })
+                    //.then(() => el.remove())
+                    .catch(console.error);
             }
         });
     };
 
-    // This runs when window has fully loaded
     window.addEventListener('load', findAndClickBlockedLinks);
+
     const observer = new MutationObserver(findAndClickBlockedLinks);
     observer.observe(document.body, { childList: true, subtree: true });
 
-    function waitForElement(el, timeout = 7000) {
+    function waitForElement(el, timeout = 10000) {
         return new Promise((resolve, reject) => {
             const endTime = Date.now() + timeout;
             (function checkVisibility() {
