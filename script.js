@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Block Popup Ad Links (Universal Clicker)
 // @description  Universally auto-clicks ad/affiliate links once to trigger site unlocks, while instantly killing the popups.
-// @version      0.6.0
+// @version      0.7.0
 // @author       Tung Do
 // @match        *://*/*
 // @grant        none
@@ -85,24 +85,29 @@
         const elements = document.querySelectorAll('a[href], [data-href], [data-url]');
         let foundAdThisCycle = false;
 
-        elements.forEach(el => {
-
+        // We use a classic for...of loop here because you cannot 'break' out of a .forEach()
+        for (const el of elements) {
             const url = el.href || el.getAttribute('data-href') || el.getAttribute('data-url');
 
             if (url && isBlockedUrl(url)) {
                 foundAdThisCycle = true;
 
-                console.log('Universal Scanner found ad link. Clicking and clearing interval:', url);
-                el.click();
-                el.remove();
-            }
-        });
+                console.log('Universal Scanner processing single ad link:', url);
 
-        // If we found and clicked an ad, OR if we hit the 10-second limit, kill the interval
-        if (foundAdThisCycle || attempts >= maxAttempts) {
-            if (attempts >= maxAttempts && !foundAdThisCycle) {
-                console.log('10 seconds elapsed without finding any ad popups. Stopping scanner.');
+                // 1. Trigger the logic
+                el.click();
+
+                // 2. Remove ONLY this specific node
+                el.remove();
+
+                // 3. BREAK OUT! Do not touch any duplicate elements until the next 500ms cycle
+                break;
             }
+        }
+
+        // Keep scanning for the full 10 seconds to catch delayed duplicates or popups
+        if (attempts >= maxAttempts) {
+            console.log('10 seconds elapsed. Stopping scanner.');
             clearInterval(clickerInterval);
         }
     }, 500);
