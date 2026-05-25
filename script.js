@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Block Popup Ad Links (Universal Clicker)
+// @name         Block Popup Ad Links
 // @description  Universally auto-clicks ad/affiliate links once to trigger site unlocks, while instantly killing the popups.
-// @version      0.7.0
+// @version      0.8.0
 // @author       Tung Do
 // @match        *://*/*
 // @grant        none
@@ -98,7 +98,9 @@
                 el.click();
 
                 // 2. Remove ONLY this specific node
-                el.remove();
+                setTimeout(() => {
+                    el.remove();
+                }, 50);
 
                 // 3. BREAK OUT! Do not touch any duplicate elements until the next 500ms cycle
                 break;
