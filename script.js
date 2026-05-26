@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Block Popup Ad Links
-// @description  Universally auto-clicks ad/affiliate links once to trigger site unlocks, while instantly killing the popups.
-// @version      0.8.0
+// @description  Remove transparent overlays + auto-click affiliate links
+// @version      1.0.0
 // @author       Tung Do
 // @match        *://*/*
 // @grant        none
@@ -11,107 +11,93 @@
 (() => {
     'use strict';
 
-    const blockedDomains = new Set([
-        'shopee.vn',
-        'lazada.vn',
-        'tiktok.com',
-        'profitableratecpm.com',
-        'eyep.blog',
-        's99s.net'
-    ]);
+    const blockedDomains = ['shopee.vn', 'lazada.vn', 'vt.tiktok.com', 'profitableratecpm.com', 'eyep.blog', 's99s.net'];
+    const whitelisted = ['google.com', 'facebook.com'];
 
-    const whitelistedDomains = new Set([
-        'google.com',
-        'facebook.com'
-    ]);
+    if (whitelisted.some(d => location.hostname.includes(d))) return;
 
-    const getBaseDomain = (host) => {
-        const parts = host.split('.');
-        return parts.slice(-2).join('.');
-    };
+    const processedUrls = new Set();
 
-    const currentHost = window.location.hostname;
-    const currentBase = getBaseDomain(currentHost);
-
-    if ([...whitelistedDomains].some(d => currentHost.includes(d))) return;
-
-    const isBlockedUrl = (url) => {
+    const isBlocked = (url) => {
         try {
-            if (!url || url.startsWith('#') || url.startsWith('javascript:')) return false;
-            const host = new URL(url, window.location.href).hostname;
-            const base = getBaseDomain(host);
-
-            return (
-                [...blockedDomains].some(d => host === d || host.endsWith('.' + d)) &&
-                base !== currentBase
-            );
-        } catch {
-            return false;
-        }
+            return blockedDomains.some(d => new URL(url, location.href).hostname.includes(d));
+        } catch { return false; }
     };
 
-    // -------------------------------------------------------------
-    // 1. Universal Catch: Proxy window.open to instantly close ad tabs
-    // -------------------------------------------------------------
-    const closeWindowSafely = (win, url) => {
-        if (win) {
-            console.log('Intercepted popup open -> Closing instantly:', url);
-            setTimeout(() => {
-                try { win.close(); } catch (e) { console.log('Popup already closed or inaccessible.'); }
-            }, 50);
-        }
-    };
+    // Remove transparent overlays
+    const removeOverlays = () => {
+        // Find all fixed/absolute positioned elements with high z-index
+        const allElements = document.querySelectorAll('*');
 
-    window.open = new Proxy(window.open, {
-        apply(target, thisArg, args) {
-            const url = args?.[0];
-            if (url && isBlockedUrl(url)) {
-                const win = Reflect.apply(target, thisArg, args);
-                closeWindowSafely(win, url);
-                return win;
+        allElements.forEach(el => {
+            const style = window.getComputedStyle(el);
+            const position = style.position;
+            const zIndex = parseInt(style.zIndex);
+
+            // Check if it's an overlay
+            if ((position === 'fixed' || position === 'absolute') && zIndex > 100) {
+                const rect = el.getBoundingClientRect();
+                const isFullScreen = rect.width >= window.innerWidth - 50 &&
+                                    rect.height >= window.innerHeight - 50;
+
+                if (isFullScreen) {
+                    console.log('Removing overlay:', el.id || el.className || 'unnamed');
+                    el.remove();
+                }
             }
-            return Reflect.apply(target, thisArg, args);
+        });
+    };
+
+    // Auto-click affiliate links
+    const neutralizeLink = (link) => {
+        if (processedUrls.has(link.href)) return;
+
+        processedUrls.add(link.href);
+
+        link.href = '#';
+        link.removeAttribute('target');
+
+        setTimeout(() => {
+            link.click();
+        }, 150);
+    };
+
+    // Scan for links
+    const scan = () => {
+        document.querySelectorAll('a[href]').forEach(link => {
+            if (isBlocked(link.href) && !processedUrls.has(link.href)) {
+                neutralizeLink(link);
+            }
+        });
+        removeOverlays();
+    };
+
+    // Block window.open
+    window.open = new Proxy(window.open, {
+        apply(target, _, args) {
+            if (args[0] && isBlocked(args[0])) {
+                console.log('Blocked popup:', args[0]);
+                return null;
+            }
+            return target(...args);
         }
     });
 
-    // -------------------------------------------------------------
-    // 2. Universal Clicker loop (Runs every 500ms, expires after 10s)
-    // -------------------------------------------------------------
-    let attempts = 0;
-    const maxAttempts = 20; // 20 attempts * 500ms = 10 seconds total
+    // Run initial scan
+    scan();
 
-    const clickerInterval = setInterval(() => {
-        attempts++;
-        const elements = document.querySelectorAll('a[href], [data-href], [data-url]');
-        let foundAdThisCycle = false;
+    // Observe DOM changes and run both scan and removeOverlays
+    const observer = new MutationObserver(() => {
+        scan();
+    });
 
-        // We use a classic for...of loop here because you cannot 'break' out of a .forEach()
-        for (const el of elements) {
-            const url = el.href || el.getAttribute('data-href') || el.getAttribute('data-url');
+    observer.observe(document.body || document.documentElement, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['style', 'class']
+    });
 
-            if (url && isBlockedUrl(url)) {
-                foundAdThisCycle = true;
-
-                console.log('Universal Scanner processing single ad link:', url);
-
-                // 1. Trigger the logic
-                el.click();
-
-                // 2. Remove ONLY this specific node
-                setTimeout(() => {
-                    el.remove();
-                }, 50);
-
-                // 3. BREAK OUT! Do not touch any duplicate elements until the next 500ms cycle
-                break;
-            }
-        }
-
-        // Keep scanning for the full 10 seconds to catch delayed duplicates or popups
-        if (attempts >= maxAttempts) {
-            console.log('10 seconds elapsed. Stopping scanner.');
-            clearInterval(clickerInterval);
-        }
-    }, 500);
+    console.log('✅ Active - observing DOM changes for both links and overlays');
 
 })();
