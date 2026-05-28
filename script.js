@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Block Popup Ad Links
 // @description  Remove transparent overlays + auto-click affiliate links
-// @version      1.0.1
+// @version      1.0.2
 // @author       Tung Do
 // @match        *://*/*
 // @grant        none
@@ -27,7 +27,7 @@
     // Remove transparent overlays
     const removeOverlays = () => {
         // Find all fixed/absolute positioned elements with high z-index
-        const allElements = document.querySelectorAll('*');
+        const allElements = document.querySelectorAll('div');
 
         allElements.forEach(el => {
             const style = window.getComputedStyle(el);
