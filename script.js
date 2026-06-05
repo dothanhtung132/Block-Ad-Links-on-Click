@@ -1,19 +1,16 @@
 // ==UserScript==
-// @name         Block Popup Ad Links
-// @description  Remove transparent overlays + auto-click affiliate links
-// @version      1.0.2
-// @author       Tung Do
-// @match        *://*/*
-// @grant        none
-// @run-at       document-start
+// @name          Block Popup Ad Links
+// @description   Auto-click affiliate links to unlock content without navigating
+// @version       1.0.3
+// @author        Tung Do
+// @match         *://*/*
+// @grant         none
+// @run-at        document-start
 // ==/UserScript==
-
 (() => {
     'use strict';
-
     const blockedDomains = ['shopee.vn', 'lazada.vn', 'vt.tiktok.com', 'profitableratecpm.com', 'eyep.blog', 's99s.net'];
-    const whitelisted = ['google.com', 'facebook.com', 'youtube.com'];
-
+    const whitelisted = ['google.com', 'facebook.com', 'youtube.com', 'deepseek.com'];
     if (whitelisted.some(d => location.hostname.includes(d))) return;
 
     const processedUrls = new Set();
@@ -24,76 +21,32 @@
         } catch { return false; }
     };
 
-    // Remove transparent overlays
-    const removeOverlays = () => {
-        // Find all fixed/absolute positioned elements with high z-index
-        const allElements = document.querySelectorAll('div');
-
-        allElements.forEach(el => {
-            const style = window.getComputedStyle(el);
-            const position = style.position;
-            const zIndex = parseInt(style.zIndex);
-
-            // Check if it's an overlay
-            if ((position === 'fixed' || position === 'absolute')) {
-                const rect = el.getBoundingClientRect();
-                const isFullScreen = rect.width >= window.innerWidth - 50 &&
-                      rect.height >= window.innerHeight - 50;
-
-                if (isFullScreen) {
-                    // Check if element is empty or has no visible content
-                    const hasContent = el.innerText.trim().length > 0 ||
-                          el.querySelector('img, video, iframe, button, a, input') !== null;
-
-                    const isVisible = style.display !== 'none' &&
-                          style.visibility !== 'hidden' &&
-                          parseFloat(style.opacity) > 0;
-
-                    // Only remove if it's empty OR invisible (transparent overlay)
-                    if (!hasContent && isVisible) {
-                        console.log('Removing empty/invisible overlay:', el.id || el.className || 'unnamed');
-                        el.remove();
-                    }
-                }
-            }
-        });
-    };
-
-    // Auto-click affiliate links
     const neutralizeLink = (link) => {
         const originalUrl = link.href;
-
         if (processedUrls.has(originalUrl)) return;
         processedUrls.add(originalUrl);
 
-        // Call their onclick handler directly (doesn't navigate)
-        if (link.onclick) {
-            link.onclick({ preventDefault: () => {} });
-        }
-
-        // Also try clicking (with preventDefault)
-        link.addEventListener('click', (e) => {
-            e.preventDefault();
-        }, { once: true });
-
+        link.href = '#';
+        link.removeAttribute('target');
         link.click();
-
-        // Then neutralize after
-        setTimeout(() => {
-            link.href = '#';
-            link.removeAttribute('target');
-        }, 500);
     };
 
-    // Scan for links
-    const scan = () => {
-        document.querySelectorAll('a[href]').forEach(link => {
-            const isVisible = link.offsetParent !== null;
-            if (isVisible && isBlocked(link.href) && !processedUrls.has(link.href)) {
-                neutralizeLink(link);
+    // Click the moment the link scrolls into view
+    const intersectionObserver = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                neutralizeLink(entry.target);
+                intersectionObserver.unobserve(entry.target);
             }
         });
-        removeOverlays();
+    }, { threshold: 0 });
+
+    const scan = () => {
+        document.querySelectorAll('a[href]').forEach(link => {
+            if (isBlocked(link.href) && !processedUrls.has(link.href)) {
+                intersectionObserver.observe(link);
+            }
+        });
     };
 
     // Block window.open
@@ -107,18 +60,36 @@
         }
     });
 
-    // Run initial scan
-    scan();
-
-    // Observe DOM changes and run both scan and removeOverlays
-    const observer = new MutationObserver(() => {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', scan);
+    } else {
         scan();
+    }
+
+    let debounceTimer;
+    const mutationObserver = new MutationObserver((mutations) => {
+        const shouldScan = mutations.some(m =>
+            (m.type === 'childList' && m.addedNodes.length > 0) ||
+            m.type === 'attributes'
+        );
+        if (shouldScan) {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(scan, 100);
+        }
     });
 
-    observer.observe(document.body || document.documentElement, {
-        childList: true,
-        subtree: true,
-        attributes: true,
-        attributeFilter: ['style', 'class']
-    });
+    const startObserver = () => {
+        mutationObserver.observe(document.body || document.documentElement, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+            attributeFilter: ['style', 'class']
+        });
+    };
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', startObserver);
+    } else {
+        startObserver();
+    }
 })();
