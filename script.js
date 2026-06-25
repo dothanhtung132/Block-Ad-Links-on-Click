@@ -22,22 +22,37 @@
 
     const processedLinks = new WeakSet();
 
+    const findHiddenAncestor = (link) => {
+        let el = link.parentElement;
+        while (el) {
+            if (window.getComputedStyle(el).display === 'none') return el;
+            el = el.parentElement;
+        }
+        return null;
+    };
+
     const neutralizeLink = (link) => {
         if (processedLinks.has(link)) return;
         processedLinks.add(link);
 
-        const modal = link.closest('.modal');
-        if (modal) {
-            modal.addEventListener('shown.bs.modal', () => {
-                link.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
-                link.href = '#';
-                link.removeAttribute('target');
-            }, { once: true });
-        } else {
-            link.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
-            link.href = '#';
-            link.removeAttribute('target');
+        const hiddenAncestor = findHiddenAncestor(link);
+        if (hiddenAncestor) {
+            const observer = new MutationObserver(() => {
+                if (window.getComputedStyle(hiddenAncestor).display !== 'none') {
+                    observer.disconnect();
+                    link.href = '#';
+                    link.removeAttribute('target');
+                    link.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+                }
+            });
+            observer.observe(hiddenAncestor, { attributes: true, attributeFilter: ['style', 'class'] });
+            return;
         }
+
+        // no hidden ancestor, click immediately
+        link.href = '#';
+        link.removeAttribute('target');
+        link.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
     };
 
     const scan = () => {
