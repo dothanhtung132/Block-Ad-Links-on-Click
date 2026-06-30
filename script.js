@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name          Block Popup Ad Links
 // @description   Auto-click affiliate links to unlock content without navigating
-// @version       1.0.4
+// @version       1.0.5
 // @author        Tung Do
 // @match         *://*/*
 // @grant         none
@@ -31,28 +31,30 @@
         return null;
     };
 
+    const triggerSafeClick = (link) => {
+        link.addEventListener('click', e => e.preventDefault(), { once: true });
+        link.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+        link.removeAttribute('target');
+        link.removeAttribute('href');
+    };
+
     const neutralizeLink = (link) => {
         if (processedLinks.has(link)) return;
         processedLinks.add(link);
 
         const hiddenAncestor = findHiddenAncestor(link);
-        if (hiddenAncestor) {
-            const observer = new MutationObserver(() => {
-                if (window.getComputedStyle(hiddenAncestor).display !== 'none') {
-                    observer.disconnect();
-                    link.href = '#';
-                    link.removeAttribute('target');
-                    link.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
-                }
-            });
-            observer.observe(hiddenAncestor, { attributes: true, attributeFilter: ['style', 'class'] });
+        if (!hiddenAncestor) {
+            triggerSafeClick(link);
             return;
         }
 
-        // no hidden ancestor, click immediately
-        link.href = '#';
-        link.removeAttribute('target');
-        link.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+        const observer = new MutationObserver(() => {
+            if (window.getComputedStyle(hiddenAncestor).display !== 'none') {
+                observer.disconnect();
+                triggerSafeClick(link);
+            }
+        });
+        observer.observe(hiddenAncestor, { attributes: true, attributeFilter: ['style', 'class'] });
     };
 
     const scan = () => {
