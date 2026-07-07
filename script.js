@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name          Block Popup Ad Links
 // @description   Auto-click affiliate links to unlock content without navigating
-// @version       1.0.5
+// @version       1.0.6
 // @author        Tung Do
 // @match         *://*/*
 // @grant         none
@@ -9,7 +9,7 @@
 // ==/UserScript==
 (() => {
     'use strict';
-    const blockedDomains = ['shopee.vn', 'lazada.vn', 'vt.tiktok.com', 'profitableratecpm.com', 'eyep.blog', 's99s.net'];
+    const blockedDomains = ['shopee.vn', 'lazada.vn', 'vt.tiktok.com', 'profitableratecpm.com', 'eyep.blog', 's99s.net', 'onelink.me'];
     const whitelisted = ['google.com', 'facebook.com', 'youtube.com', 'deepseek.com'];
     if (whitelisted.some(d => location.hostname.includes(d))) return;
 
@@ -36,11 +36,11 @@
         link.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
         link.removeAttribute('target');
         link.removeAttribute('href');
+        processedLinks.add(link);
     };
 
     const neutralizeLink = (link) => {
         if (processedLinks.has(link)) return;
-        processedLinks.add(link);
 
         const hiddenAncestor = findHiddenAncestor(link);
         if (!hiddenAncestor) {
