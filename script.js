@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name          Block Popup Ad Links
 // @description   Auto-click affiliate links to unlock content without navigating
-// @version       1.0.6
+// @version       1.0.7
 // @author        Tung Do
 // @match         *://*/*
 // @grant         none
@@ -11,7 +11,9 @@
     'use strict';
     const blockedDomains = ['shopee.vn', 'lazada.vn', 'vt.tiktok.com', 'profitableratecpm.com', 'eyep.blog', 's99s.net', 'onelink.me'];
     const whitelisted = ['google.com', 'facebook.com', 'youtube.com', 'deepseek.com'];
-    if (whitelisted.some(d => location.hostname.includes(d))) return;
+
+    const isWhitelisted = (hostname) => whitelisted.some(d => hostname === d || hostname.endsWith('.' + d));
+    if (isWhitelisted(location.hostname)) return;
 
     const isBlocked = (url) => {
         try {
@@ -22,10 +24,17 @@
 
     const processedLinks = new WeakSet();
 
+    const isElementHidden = (el) => {
+        const style = window.getComputedStyle(el);
+        return style.display === 'none' ||
+            style.visibility === 'hidden' ||
+            parseFloat(style.opacity) === 0;
+    };
+
     const findHiddenAncestor = (link) => {
         let el = link.parentElement;
         while (el) {
-            if (window.getComputedStyle(el).display === 'none') return el;
+            if (isElementHidden(el)) return el;
             el = el.parentElement;
         }
         return null;
@@ -49,7 +58,7 @@
         }
 
         const observer = new MutationObserver(() => {
-            if (window.getComputedStyle(hiddenAncestor).display !== 'none') {
+            if (!isElementHidden(hiddenAncestor)) {
                 observer.disconnect();
                 triggerSafeClick(link);
             }
